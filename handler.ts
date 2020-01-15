@@ -19,6 +19,14 @@ class OCRHandler {
     await worker.initialize('eng');
   }
 
+  getPriceFromImage(imageText: string): string {
+    let euroPos = imageText.lastIndexOf('EUR ');
+    let nextSpaceAfterEUR = imageText.indexOf(' ', euroPos + 4);
+    let nextNewLineAfterEUR = imageText.indexOf('\n', euroPos + 4);
+    let endPos = nextSpaceAfterEUR < nextNewLineAfterEUR ? nextSpaceAfterEUR : nextNewLineAfterEUR;
+    return imageText.slice(euroPos, endPos);
+  }
+
   public async getImageText(event: APIGatewayEvent, _: Context): Promise<APIGatewayProxyResult> {
     let url = event['url'];
     if (!url) {
@@ -30,15 +38,7 @@ class OCRHandler {
     await this.worker.terminate();
 
     if (text.indexOf('EUR ') > -1) {
-      let euroPos = text.lastIndexOf('EUR ');
-
-      let nextSpaceAfterEUR = text.indexOf(' ', euroPos + 4);
-      let nextNewLineAfterEUR = text.indexOf('\n', euroPos + 4);
-      let endPos = nextSpaceAfterEUR < nextNewLineAfterEUR ? nextSpaceAfterEUR : nextNewLineAfterEUR;
-
-      let price = text.slice(euroPos, endPos);
-
-      return this.responseBuilder.getResponse(200, { price: price });
+      return this.responseBuilder.getResponse(200, { price: this.getPriceFromImage(text) });
     } else {
       return this.responseBuilder.getResponse(404, { error: 'Price not found' });
     }
