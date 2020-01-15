@@ -1,48 +1,49 @@
-import { APIGatewayProxyHandler } from 'aws-lambda';
+import { APIGatewayEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
+import { ResponseBuilder } from './response';
 import 'source-map-support/register';
 
 import { createWorker } from 'tesseract.js';
 
-const worker = createWorker({});
+class OCRHandler {
+  responseBuilder: ResponseBuilder;
+  worker: Tesseract.Worker;
 
-export const ocr: APIGatewayProxyHandler = async (event, _context) => {
-  let url = event['url'];
-  if (!url) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({
-        error: 'Missing \'url\' parameter',
-      }, null, 0),
-    };
+  constructor() {
+    this.worker = createWorker();
+    this.responseBuilder = new ResponseBuilder();
   }
 
-  await worker.load();
-  await worker.loadLanguage('eng');
-  await worker.initialize('eng');
-  const { data: { text } } = await worker.recognize(url);
-  await worker.terminate();
+  async loadAndInitWorker(worker: Tesseract.Worker): Promise<void> {
+    await worker.load();
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+  }
 
-  if (text.indexOf('EUR ') > -1) {
-    let euroPos = text.lastIndexOf('EUR ');
+  public async getImageText(event: APIGatewayEvent, _: Context): Promise<APIGatewayProxyResult> {
+    let url = event['url'];
+    if (!url) {
+      return this.responseBuilder.getResponse(400, { error: 'Missing \'url\' parameter' });
+    }
 
-    let nextSpaceAfterEUR = text.indexOf(' ', euroPos + 4);
-    let nextNewLineAfterEUR = text.indexOf('\n', euroPos + 4);
-    let endPos = nextSpaceAfterEUR < nextNewLineAfterEUR ? nextSpaceAfterEUR : nextNewLineAfterEUR;
+    await this.loadAndInitWorker(this.worker);
+    const { data: { text } } = await this.worker.recognize(url);
+    await this.worker.terminate();
 
-    let price = text.slice(euroPos, endPos);
+    if (text.indexOf('EUR ') > -1) {
+      let euroPos = text.lastIndexOf('EUR ');
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        price: price,
-      }, null, 0),
-    };
-  } else {
-    return {
-      statusCode: 404,
-      body: JSON.stringify({
-        error: "Price not found",
-      }, null, 0),
-    };
+      let nextSpaceAfterEUR = text.indexOf(' ', euroPos + 4);
+      let nextNewLineAfterEUR = text.indexOf('\n', euroPos + 4);
+      let endPos = nextSpaceAfterEUR < nextNewLineAfterEUR ? nextSpaceAfterEUR : nextNewLineAfterEUR;
+
+      let price = text.slice(euroPos, endPos);
+
+      return this.responseBuilder.getResponse(200, { price: price });
+    } else {
+      return this.responseBuilder.getResponse(404, { error: 'Price not found' });
+    }
   }
 }
+
+export const handler = new OCRHandler();
+export const getImageText = handler.getImageText.bind(handler);
