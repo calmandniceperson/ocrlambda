@@ -1,3 +1,5 @@
+// Author(s): Michael Koeppl
+
 import { APIGatewayProxyResult } from 'aws-lambda';
 
 export class ResponseBuilder {

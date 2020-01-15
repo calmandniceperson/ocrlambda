@@ -1,30 +1,18 @@
+// Author(s): Michael Koeppl
+
 import { APIGatewayEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { ResponseBuilder } from './response';
+import { ImageProcessor } from './image_processor';
 import 'source-map-support/register';
 
-import { createWorker } from 'tesseract.js';
 
 class OCRHandler {
   responseBuilder: ResponseBuilder;
-  worker: Tesseract.Worker;
+  imageProcessor: ImageProcessor;
 
   constructor() {
-    this.worker = createWorker();
+    this.imageProcessor = new ImageProcessor()
     this.responseBuilder = new ResponseBuilder();
-  }
-
-  async loadAndInitWorker(worker: Tesseract.Worker): Promise<void> {
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-  }
-
-  getPriceFromImage(imageText: string): string {
-    let euroPos = imageText.lastIndexOf('EUR ');
-    let nextSpaceAfterEUR = imageText.indexOf(' ', euroPos + 4);
-    let nextNewLineAfterEUR = imageText.indexOf('\n', euroPos + 4);
-    let endPos = nextSpaceAfterEUR < nextNewLineAfterEUR ? nextSpaceAfterEUR : nextNewLineAfterEUR;
-    return imageText.slice(euroPos, endPos);
   }
 
   public async getImageText(event: APIGatewayEvent, _: Context): Promise<APIGatewayProxyResult> {
@@ -33,12 +21,9 @@ class OCRHandler {
       return this.responseBuilder.getResponse(400, { error: 'Missing \'url\' parameter' });
     }
 
-    await this.loadAndInitWorker(this.worker);
-    const { data: { text } } = await this.worker.recognize(url);
-    await this.worker.terminate();
-
-    if (text.indexOf('EUR ') > -1) {
-      return this.responseBuilder.getResponse(200, { price: this.getPriceFromImage(text) });
+    let price = await this.imageProcessor.readPrice(url);
+    if (price) {
+      return this.responseBuilder.getResponse(200, { price: price });
     } else {
       return this.responseBuilder.getResponse(404, { error: 'Price not found' });
     }
