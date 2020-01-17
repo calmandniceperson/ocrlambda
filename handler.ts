@@ -5,7 +5,6 @@ import { ResponseBuilder } from './response';
 import { ImageProcessor } from './image_processor';
 import 'source-map-support/register';
 
-
 class OCRHandler {
   responseBuilder: ResponseBuilder;
   imageProcessor: ImageProcessor;
